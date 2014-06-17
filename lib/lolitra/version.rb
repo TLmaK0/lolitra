@@ -1,3 +1,3 @@
 module Lolitra
-  VERSION = "0.1.0b"
+  VERSION = "0.1.0c"
 end

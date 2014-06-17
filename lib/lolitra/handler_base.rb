@@ -201,7 +201,10 @@ module Lolitra
     end
 
     def initialize(hash={})   
-      hash.each { |key, value| self.send("#{MessageHandler::Helpers.underscore(key)}=", value) }
+      hash.each { |key, value| 
+        method = "#{MessageHandler::Helpers.underscore(key)}="
+        self.send(method, value) if self.respond_to?(method)
+      }
     end
 
     def to_hash
