@@ -16,7 +16,7 @@ Gem::Specification.new do |gem|
   gem.version       = Lolitra::VERSION
 
   gem.add_development_dependency("rspec")
-  gem.add_dependency("amqp")
+  gem.add_dependency("amqp", ">= 0.8.4")
   gem.add_dependency("json")
   gem.add_dependency("log4r")
   gem.add_dependency("faye")
