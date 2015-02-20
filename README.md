@@ -1,6 +1,6 @@
 # Lolitra
 
-TODO: Write a gem description
+Amqp and Faye event bus
 
 ## Installation
 

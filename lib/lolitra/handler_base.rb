@@ -24,7 +24,7 @@ module Lolitra
   end
 
   def self.publish(message)
-    Lolitra::MessageHandlerManager.bus.publish(message)
+    Lolitra::MessageHandlerManager.publish(message)
   end
 
   module MessageHandler
@@ -260,7 +260,6 @@ module Lolitra
           channel = create_channel(connection) do |channel|
             begin
               self.exchange = channel.topic(@params[:exchange], :durable => true)
-              channel.close
 
               @params[:pull_subscribers].each do |handler|
                 Lolitra::MessageHandlerManager.register_pull_subscriber(handler)
@@ -283,6 +282,7 @@ module Lolitra
     end
 
     def publish(message)
+      #TODO: if exchange channel is closed doesn't log anything
       self.exchange.publish(message.marshall, :routing_key => message.class.message_key, :timestamp => Time.now.to_i)
     end
 
