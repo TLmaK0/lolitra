@@ -4,7 +4,7 @@ Amqp and Faye event bus
 
 ## Installation
 
-Add this line to your application's Gemfile:
+Add this line to your Gemfile:
 
     gem 'lolitra'
 
@@ -20,7 +20,7 @@ Or install it yourself as:
 
 Create an event bus on initializers
 
-    Lolitra::AmqpBus.new(
+    Lolitra::RabbitmqBus.new(
       :exchange => "exchangetest",
       :queue_prefix => "my_prefix_",
       :host => "127.0.0.1",
@@ -67,6 +67,9 @@ Create a message handler
       end
        
     end
+
+*Rabbitmq*
+Lolitra generates a deadletter exchange and queues to handle dead letters and will be aware about connections issues, reconnecting on every failure.
 
 ## Contributing
 
