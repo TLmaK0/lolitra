@@ -22,12 +22,11 @@ Create an event bus on initializers
 
     Lolitra::RabbitmqBus.new(
       :exchange => "exchangetest",
-      :queue_prefix => "my_prefix_",
       :host => "127.0.0.1",
       :port => 5672,
       :user => "guest",
       :pass => "guest",
-      :pull_subscribers => [DevicesHandler, FoldersHandler, UsersHandler]
+      :pull_subscribers => [DevicesHandler]
     )
 
 Create messages
