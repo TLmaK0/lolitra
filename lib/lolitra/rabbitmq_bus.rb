@@ -5,6 +5,8 @@ module Lolitra
     attr_accessor :exchange_dead_letter
     attr_accessor :options
 
+    SUBSCRIBE_OPTIONS = {:durable => true}
+
     def initialize(hash = {})
       Lolitra::MessageHandlerManager.bus = self
 
@@ -15,7 +17,8 @@ module Lolitra
         :exchange_dead_params => {}, 
         :queue_params => {},
         :queue_dead_suffix => ".dead",
-        :queue_dead_params => {}
+        :queue_dead_params => {},
+        :no_consume => false,
       }.merge(hash.delete(:options) || {})
 
       self.options[:queue_params][:arguments] = {} unless self.options[:queue_params][:arguments]
@@ -36,8 +39,8 @@ module Lolitra
               self.exchange = channel.topic(@params[:exchange], :durable => true)
               self.exchange_dead_letter = channel.topic("#{@params[:exchange]}#{@options[:exchange_dead_suffix]}", :durable => true)
 
-              @params[:pull_subscribers].each do |handler|
-                Lolitra::MessageHandlerManager.register_pull_subscriber(handler)
+              @params[:subscribers].each do |handler|
+                Lolitra::MessageHandlerManager.register_subscriber(handler)
               end
             rescue => e
               Lolitra::log_exception(e)
@@ -46,23 +49,42 @@ module Lolitra
         end
         self.connection.on_tcp_connection_loss do |connection, settings|
           # reconnect in 10 seconds, without enforcement
-          Lolitra::logger.error("Connection loss. Trying to reconnect in 10 secs...")
+          Lolitra::logger.info("Connection loss. Trying to reconnect in 10 secs if needed.")
           connection.reconnect(false, 10)
         end
       end
     end
 
-    def subscribe(message_class, handler_class)
-      create_queue(message_class, handler_class, {:exclusive => true, :durable => false}, "")
+    def disconnect(&block)
+      self.connection.close(&block)
     end
 
-    def pull_subscribe(message_class, handler_class)
-      create_queue(message_class, handler_class, {:durable => true})
+    def subscribe(message_class, handler_class)
+      create_queue(message_class, handler_class, SUBSCRIBE_OPTIONS)
     end
 
     def publish(message)
       #TODO: if exchange channel is closed doesn't log anything
       self.exchange.publish(message.marshall, :routing_key => message.class.message_key, :timestamp => Time.now.to_i)
+    end
+
+    def unsubscribe(handler_class, &block)
+      queue_name = generate_queue_name(handler_class)
+      begin
+        create_channel(self.connection) do |channel|
+          queue = channel.queue(queue_name, SUBSCRIBE_OPTIONS) do |queue|
+            begin
+              queue.delete
+              block.call(handler_class, true)
+            rescue => e
+              Lolitra::log_exception(e)
+              block.call(handler_class, false)
+            end
+          end
+        end
+      rescue => e
+        Lolitra::log_exception(e)
+      end
     end
 
   private
@@ -77,9 +99,13 @@ module Lolitra
       channel 
     end
 
+    def generate_queue_name(handler_class)
+      "#{@options[:queue_prefix]}#{MessageHandler::Helpers.underscore(handler_class.name)}#{@options[:queue_suffix]}"
+    end
+
     def create_queue(message_class, handler_class, options)
       begin
-        queue_name = "#{@options[:queue_prefix]}#{MessageHandler::Helpers.underscore(handler_class.name)}#{@options[:queue_suffix]}"
+        queue_name = generate_queue_name(handler_class)
 
         create_channel(self.connection) do |channel|
           begin
@@ -91,7 +117,7 @@ module Lolitra
           end
         end
       
-        if !@channels[queue_name] #Only one subscriber by queue_name
+        if !@options[:no_consume] && !@channels[queue_name] #Only one subscriber by queue_name
           @channels[queue_name] = create_channel(self.connection) do |channel|
             channel.prefetch(1).queue(queue_name, options).subscribe(:ack => true) do |info, payload|
               begin

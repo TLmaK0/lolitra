@@ -29,6 +29,14 @@ module Lolitra
     Lolitra::MessageHandlerManager.publish(message)
   end
 
+  def self.unsubscribe(handler_class, &block)
+    Lolitra::MessageHandlerManager.unsubscribe(handler_class, &block)
+  end
+
+  def self.disconnect(&block)
+    Lolitra::MessageHandlerManager.disconnect(&block)
+  end
+
   module MessageHandler
     module Helpers
       def self.underscore(arg)
@@ -159,14 +167,13 @@ module Lolitra
       end
     end
 
-    def self.register_pull_subscriber(handler_class)
-      instance.register_pull_subscriber(handler_class)
+    def self.unsubscribe(handler_class, &block)
+      instance.unsubscribe(handler_class, &block)
     end
-   
-    def register_pull_subscriber(handler_class)
-      handler_class.handle_messages.each do |message_class|
-        bus.pull_subscribe(message_class, handler_class)
-      end
+
+    def unsubscribe(handler_class, &block)
+      Lolitra::logger.info("Unsubscribing #{handler_class}")
+      bus.unsubscribe(handler_class, &block)
     end
 
     def self.publish(message)
@@ -177,6 +184,14 @@ module Lolitra
       Lolitra::logger.debug("Message sent: #{message.class.message_key}")
       Lolitra::logger.debug("#{message.marshall}")
       bus.publish(message)
+    end
+
+    def self.disconnect(&block)
+      instance.disconnect(&block)
+    end
+
+    def disconnect(&block)
+      bus.disconnect(&block)
     end
   end
 
