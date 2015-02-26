@@ -37,6 +37,16 @@ module Lolitra
     Lolitra::MessageHandlerManager.disconnect(&block)
   end
 
+  def self.subscribers
+    Lolitra::MessageHandlerManager.instance.subscribers.collect do |subscriber|
+      subscriber.name
+    end
+  end
+
+  def self.process_dead_messages(subscriber)
+    Lolitra::MessageHandlerManager.instance.process_dead_messages(subscriber)
+  end
+
   module MessageHandler
     module Helpers
       def self.underscore(arg)
@@ -148,6 +158,7 @@ module Lolitra
     include Singleton
 
     attr_accessor :bus
+    attr_accessor :subscribers
 
     def self.bus=(new_bus)
       instance.bus = new_bus
@@ -161,7 +172,16 @@ module Lolitra
       instance.register_subscriber(handler_class)
     end
    
+    def subscribers
+      @subscribers ||= []
+    end
+
+    def process_dead_messages(handler_class)
+      bus.process_dead_messages(handler_class)
+    end
+
     def register_subscriber(handler_class)
+      subscribers << handler_class
       handler_class.handle_messages.each do |message_class|
         bus.subscribe(message_class, handler_class)
       end

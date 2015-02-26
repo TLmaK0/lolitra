@@ -4,6 +4,7 @@ module Lolitra
     attr_accessor :exchange
     attr_accessor :exchange_dead_letter
     attr_accessor :options
+    attr_accessor :subscribers
 
     SUBSCRIBE_OPTIONS = {:durable => true}
 
@@ -87,7 +88,44 @@ module Lolitra
       end
     end
 
+    def process_dead_messages(handler_class)
+      queue_name_dead = generate_queue_name_dead(handler_class)
+      options = SUBSCRIBE_OPTIONS 
+      create_channel(self.connection) do |channel|
+        begin
+          channel.queue(queue_name_dead, options.merge(@options[:queue_dead_params])) do |queue|
+            recursive_pop(channel, queue, handler_class)
+          end
+        rescue => e
+          Lolitra::log_exception(e)
+        end
+      end
+      true
+    end
+
   private
+    def recursive_pop(channel, queue, handler_class)
+      queue.pop(:ack => true) do |info, payload|
+        if payload
+          Lolitra::logger.info("Routing key: #{info.routing_key}")
+          Lolitra::logger.info("Payload: #{payload}")
+          begin
+            message_class_tmp = handler_class.handlers[info.routing_key][0]
+            handler_class.handle(message_class_tmp.unmarshall(payload))
+            info.ack
+            recursive_pop(channel, queue, handler_class)
+          rescue => e
+            channel.reject(info.delivery_tag, true)
+            Lolitra::log_exception(e)
+          end
+        end
+      end 
+    end
+
+    def publish_payload(routing_key, payload)
+      self.exchange.publish(payload, :routing_key => routing_key, :timestamp => Time.now.to_i)
+    end
+
     def create_channel(connection, &block)
       channel = AMQP::Channel.new(connection, :auto_recovery => true) do
         channel.on_error do |channel, close|
@@ -103,14 +141,19 @@ module Lolitra
       "#{@options[:queue_prefix]}#{MessageHandler::Helpers.underscore(handler_class.name)}#{@options[:queue_suffix]}"
     end
 
+    def generate_queue_name_dead(handler_class)
+      "#{generate_queue_name(handler_class)}#{@options[:queue_dead_suffix]}"
+    end
+
     def create_queue(message_class, handler_class, options)
       begin
         queue_name = generate_queue_name(handler_class)
+        queue_name_dead = generate_queue_name_dead(handler_class)
 
         create_channel(self.connection) do |channel|
           begin
             channel.queue(queue_name, options.merge(@options[:queue_params])).bind(self.exchange, :routing_key => message_class.message_key)
-            channel.queue("#{queue_name}#{@options[:queue_dead_suffix]}", options.merge(@options[:queue_dead_params])).bind(self.exchange_dead_letter, :routing_key => message_class.message_key)
+            channel.queue(queue_name_dead, options.merge(@options[:queue_dead_params])).bind(self.exchange_dead_letter, :routing_key => message_class.message_key)
             channel.close
           rescue => e
             Lolitra::log_exception(e)
@@ -118,25 +161,37 @@ module Lolitra
         end
       
         if !@options[:no_consume] && !@channels[queue_name] #Only one subscriber by queue_name
-          @channels[queue_name] = create_channel(self.connection) do |channel|
-            channel.prefetch(1).queue(queue_name, options).subscribe(:ack => true) do |info, payload|
-              begin
-                Lolitra::logger.debug("Message recived: #{info.routing_key}")
-                Lolitra::logger.debug("#{payload}")
-                message_class_tmp = handler_class.handlers[info.routing_key][0]
-                handler_class.handle(message_class_tmp.unmarshall(payload))
-                info.ack 
-              rescue => e
-                channel.reject(info.delivery_tag, false)
-                Lolitra::log_exception(e)
-                FileUtils.touch("#{Dir.pwd}/tmp/deadletter")
-              end
-            end
-          end
+          @channels[queue_name] = subscribe_to_messages(queue_name, options, handler_class)
         end
       rescue => e
           Lolitra::log_exception(e)
       end
+    end
+
+    def subscribe_to_messages(queue_name, options, handler_class)
+      create_channel(self.connection) do |channel|
+        channel.prefetch(1).queue(queue_name, options.merge(@options[:queue_params])).subscribe(:ack => true) do |info, payload|
+          begin
+            Lolitra::logger.debug("Message recived: #{info.routing_key}")
+            Lolitra::logger.debug("#{payload}")
+            message_class_tmp = handler_class.handlers[info.routing_key][0]
+            handler_class.handle(message_class_tmp.unmarshall(payload))
+            info.ack 
+          rescue => e
+            channel.reject(info.delivery_tag, false)
+            Lolitra::log_exception(e)
+            mark_deadletter
+          end
+        end
+      end
+    end
+
+    def remove_mark_deadletter
+      FileUtils.rm("#{Dir.pwd}/tmp/deadletter")
+    end
+
+    def mark_deadletter
+      FileUtils.touch("#{Dir.pwd}/tmp/deadletter")
     end
   end
 end

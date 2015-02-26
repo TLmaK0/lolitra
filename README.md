@@ -70,6 +70,20 @@ Create a message handler
 *Rabbitmq*
 Lolitra generates a deadletter exchange and queues to handle dead letters and will be aware about connections issues, reconnecting on every failure.
 
+*Deadletter manual handling*
+With lolitra you can recover dead letter message with irb or rails console.
+
+```
+Lolitra::subscribers 
+```
+will return the available handlers
+
+```
+Lolitra::process_deadletter_messages(DevicesHandler)
+```
+will process all dead letter from DevicesHandler until found an exception
+Fail recover deadletter will reenqueue to dead letter queue
+
 ## Contributing
 
 1. Fork it
