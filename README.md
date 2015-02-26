@@ -79,10 +79,21 @@ Lolitra::subscribers
 will return the available handlers
 
 ```
-Lolitra::process_deadletter_messages(DevicesHandler)
+Lolitra::process_deadletters(DevicesHandler)
 ```
 will process all dead letter from DevicesHandler until found an exception
 Fail recover deadletter will reenqueue to dead letter queue
+
+```
+Lolitra::remove_next_deadletter(DeviceHandler)
+```
+Will remove next deadletter without doing anything
+
+```
+Lolitra::purge_deadletters(DeviceHandler)
+```
+Will remove all deadletters without doing anything
+
 
 ## Contributing
 

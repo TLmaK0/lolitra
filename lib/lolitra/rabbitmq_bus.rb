@@ -88,7 +88,7 @@ module Lolitra
       end
     end
 
-    def process_dead_messages(handler_class)
+    def process_deadletters(handler_class)
       queue_name_dead = generate_queue_name_dead(handler_class)
       options = SUBSCRIBE_OPTIONS 
       create_channel(self.connection) do |channel|
@@ -103,7 +103,45 @@ module Lolitra
       true
     end
 
+    def purge_deadletters(handler_class)
+      queue_name_dead = generate_queue_name_dead(handler_class)
+      options = SUBSCRIBE_OPTIONS 
+      create_channel(self.connection) do |channel|
+        begin
+          channel.queue(queue_name_dead, options.merge(@options[:queue_dead_params])) do |queue|
+            purge_queue(queue)
+          end
+        rescue => e
+          Lolitra::log_exception(e)
+        end
+      end
+      true
+    end
+
+    def remove_next_deadletter(handler_class)
+      queue_name_dead = generate_queue_name_dead(handler_class)
+      options = SUBSCRIBE_OPTIONS 
+      create_channel(self.connection) do |channel|
+        begin
+          channel.queue(queue_name_dead, options.merge(@options[:queue_dead_params])) do |queue|
+            queue.pop
+          end
+        rescue => e
+          Lolitra::log_exception(e)
+        end
+      end
+      true
+    end
+
   private
+    def purge_queue(queue)
+      queue.pop do |info, payload|
+        if (payload)
+          purge_queue(queue)
+        end
+      end
+    end
+
     def recursive_pop(channel, queue, handler_class)
       queue.pop(:ack => true) do |info, payload|
         if payload

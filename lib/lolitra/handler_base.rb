@@ -43,8 +43,16 @@ module Lolitra
     end
   end
 
-  def self.process_dead_messages(subscriber)
-    Lolitra::MessageHandlerManager.instance.process_dead_messages(subscriber)
+  def self.process_deadletters(subscriber)
+    Lolitra::MessageHandlerManager.instance.process_deadletters(subscriber)
+  end
+
+  def self.remove_next_deadletter(subscriber)
+    Lolitra::MessageHandlerManager.instance.remove_next_deadletter(subscriber)
+  end
+
+  def self.purge_deadletters(subscriber)
+    Lolitra::MessageHandlerManager.instance.purge_deadletters(subscriber)
   end
 
   module MessageHandler
@@ -176,8 +184,16 @@ module Lolitra
       @subscribers ||= []
     end
 
-    def process_dead_messages(handler_class)
-      bus.process_dead_messages(handler_class)
+    def process_deadletters(handler_class)
+      bus.process_deadletters(handler_class)
+    end
+
+    def purge_deadletters(handler_class)
+      bus.purge_deadletters(handler_class)
+    end
+
+    def remove_next_deadletter(handler_class)
+      bus.remove_next_deadletter(handler_class)
     end
 
     def register_subscriber(handler_class)
