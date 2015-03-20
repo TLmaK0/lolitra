@@ -73,10 +73,12 @@ module Lolitra
       queue_name = generate_queue_name(handler_class)
       begin
         create_channel(self.connection) do |channel|
+Lolitra::logger.error(queue_name)
           queue = channel.queue(queue_name, SUBSCRIBE_OPTIONS) do |queue|
             begin
-              queue.delete
-              block.call(handler_class, true)
+              queue.delete do
+                block.call(handler_class, true)
+              end
             rescue => e
               Lolitra::log_exception(e)
               block.call(handler_class, false)
@@ -176,7 +178,11 @@ module Lolitra
     end
 
     def generate_queue_name(handler_class)
-      "#{@options[:queue_prefix]}#{MessageHandler::Helpers.underscore(handler_class.name)}#{@options[:queue_suffix]}"
+      if handler_class.respond_to?('queue_name')
+        handler_class.queue_name
+      else
+        "#{@options[:queue_prefix]}#{MessageHandler::Helpers.underscore(handler_class.name)}#{@options[:queue_suffix]}"
+      end
     end
 
     def generate_queue_name_dead(handler_class)
