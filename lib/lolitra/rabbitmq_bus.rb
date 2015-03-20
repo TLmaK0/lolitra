@@ -73,7 +73,6 @@ module Lolitra
       queue_name = generate_queue_name(handler_class)
       begin
         create_channel(self.connection) do |channel|
-Lolitra::logger.error(queue_name)
           queue = channel.queue(queue_name, SUBSCRIBE_OPTIONS) do |queue|
             begin
               queue.delete do
