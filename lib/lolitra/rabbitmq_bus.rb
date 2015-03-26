@@ -214,17 +214,7 @@ module Lolitra
     def subscribe_to_messages(queue_name, options, handler_class)
       create_channel(self.connection) do |channel|
         channel.prefetch(1).queue(queue_name, options.merge(@options[:queue_params])).subscribe(:ack => true) do |info, payload|
-          begin
-            Lolitra::logger.debug("Message recived: #{info.routing_key}")
-            Lolitra::logger.debug("#{payload}")
-            message_class_tmp = handler_class.handlers[info.routing_key][0]
-            handler_class.handle(message_class_tmp.unmarshall(payload))
-            info.ack 
-          rescue => e
-            channel.reject(info.delivery_tag, false)
-            Lolitra::log_exception(e)
-            mark_deadletter
-          end
+          process_message(handler_class, channel, info, payload)
         end
       end
     end
@@ -235,6 +225,26 @@ module Lolitra
 
     def mark_deadletter
       FileUtils.touch("#{Dir.pwd}/tmp/deadletter")
+    end
+
+    def process_message(handler_class, channel, info, payload, remaining_attempts=5)
+      begin
+        Lolitra::logger.debug("Message recived: #{info.routing_key}")
+        Lolitra::logger.debug("#{payload}")
+        message_class_tmp = handler_class.handlers[info.routing_key][0]
+        handler_class.handle(message_class_tmp.unmarshall(payload))
+        info.ack 
+      rescue => e
+        if remaining_attempts > 0 
+          EventMachine.add_timer(0.5) do
+            process_message(handler_class, channel, info, payload, remaining_attempts - 1)
+          end
+        else
+          mark_deadletter
+          channel.reject(info.delivery_tag, false)
+          Lolitra::log_exception(e)
+        end
+      end
     end
   end
 end
